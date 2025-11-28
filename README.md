@@ -25,6 +25,7 @@ ip r | grep default
 
 - Crée un fichier netplan :
 sudo nano /etc/netplan/01-netcfg.yaml
+
 Exemple pour garder l’IP 172.29.xx.xxx :
 
 network:
@@ -46,34 +47,56 @@ sudo netplan apply
 - Créer la base MySQL `zm`
 - Ajouter 2 caméras via l’interface ZM
 - Tester flux MJPEG via `<img src="http://IP_SERVEUR/zm/cgi-bin/nph-zms?...">`
+
 Les étapes d' Installation de ZoneMinder :
+
 -Étape 1 : Mettre à jour le système
+
 sudo apt update && sudo apt upgrade -y
+
 sudo apt install software-properties-common -y
 
+
 -Étape 2 : Ajouter le dépôt ZoneMinder
+
 sudo add-apt-repository ppa:iconnor/zoneminder-1.36 -y
+
 sudo apt update
 
+
 -Étape 3 : Installer ZoneMinder
+
 sudo apt install zoneminder -y
 
+
 -Étape 4 : Activer et démarrer le service
+
 sudo systemctl enable zoneminder
+
 sudo systemctl start zoneminder
+
 sudo systemctl status zoneminder
 
+
 -Étape 5 : Configurer le service Apache
+
 sudo a2enconf zoneminder
+
 sudo a2enmod rewrite
+
 sudo a2enmod cgi
+
 sudo systemctl restart apache2
 
+
 -Étape 6 : Vérifier l’accès
+
 Ouvre ton navigateur et tape :
 http://IP_DE_TON_SERVEUR/zm
 
+
 Login par défaut : admin
+
 Mot de passe : défini lors de la création du compte
 
 ## Dashboard Flask
