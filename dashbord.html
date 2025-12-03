@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard IoT – Salle Serveur</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* --- Global --- */
+body { margin:0; padding:0; font-family:'Roboto', sans-serif; background:#0d1117; color:white; }
+header { position:sticky; top:0; background:#161b22; padding:15px; text-align:center; box-shadow:0 3px 10px rgba(0,0,0,0.5); z-index:100; }
+h1 { color:#58a6ff; margin:0; font-size:32px; }
+#datetime { margin-top:5px; font-size:18px; color:#8b949e; }
+
+/* --- Grid layout --- */
+.grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap:25px; padding:25px; }
+
+/* --- Cards --- */
+.card { background:#161b22; padding:25px; border-radius:20px; box-shadow:0 0 15px rgba(0,150,255,0.2); text-align:center; transition:0.3s; }
+.card:hover { transform:translateY(-5px); box-shadow:0 0 25px rgba(0,200,255,0.4); }
+.card h2 { margin-bottom:15px; font-size:22px; color:#58a6ff; }
+.value { font-size:42px; font-weight:bold; margin-bottom:15px; }
+.status-ok { color:#3fb950; }
+.status-danger { color:#ff4d4d; animation:blink 1s infinite; }
+@keyframes blink { 50% { opacity:0.5; } }
+
+canvas { background:#0d1117; border-radius:15px; }
+
+/* --- Caméras --- */
+#camsContainer { text-align:center; margin:20px 0; }
+#camsContainer h2 { color:#58a6ff; margin-bottom:15px; font-size:24px; }
+#camBox { display:flex; gap:15px; justify-content:center; }
+#camBox img { width:48%; border-radius:15px; box-shadow:0 0 20px rgba(0,150,255,0.3); }
+
+/* --- Alert Box --- */
+.alert-box { position:fixed; top:20px; right:20px; background:linear-gradient(45deg,#ff4d4d,#ff0000); color:white; padding:20px 30px; border-radius:15px; font-weight:bold; box-shadow:0 0 25px rgba(255,0,0,0.6); display:none; z-index:2000; animation:slideIn 0.5s ease; }
+@keyframes slideIn { 0% {opacity:0; transform:translateX(100px);} 100% {opacity:1; transform:translateX(0);} }
+</style>
+</head>
+<body>
+
+<header>
+    <h1>📊 Dashboard IoT – Salle Serveur</h1>
+    <div id="datetime">--:--:--</div>
+</header>
+
+<!-- Capteurs -->
+<div class="grid">
+    <div class="card">
+        <h2>🌡 Température (°C)</h2>
+        <div id="temp" class="value">--</div>
+        <canvas id="tempChart" height="150"></canvas>
+    </div>
+    <div class="card">
+        <h2>💧 Humidité (%)</h2>
+        <div id="humidity" class="value">--</div>
+        <canvas id="humChart" height="150"></canvas>
+    </div>
+    <div class="card">
+        <h2>🔊 Niveau sonore (dB)</h2>
+        <div id="sound" class="value">--</div>
+        <canvas id="soundChart" height="150"></canvas>
+    </div>
+</div>
+
+<!-- Caméras -->
+<div id="camsContainer" class="card">
+    <h2>🎥 Caméras de surveillance</h2>
+
+    <div id="camBox">
+        <!-- Cam 1 : ZoneMinder -->
+        <img src="http://172.18.201.183/zm/cgi-bin/nph-zms?mode=jpeg&monitor=5&scale=80&maxfps=15&user=admin&pass=021002" alt="Cam1">
+
+        <!-- Cam 2 : Caméra téléphone Android -->
+        <!-- Décommente seulement si ton tel est allumé -->
+        <!-- <img src="http://10.25.14.86:4747/video" alt="Caméra Téléphone"> -->
+    </div>
+</div>
+
+<div class="alert-box" id="alertBox">⚠ Seuil dépassé !</div>
+
+<script>
+// Paramètres
+const maxPoints = 20;
+const SEUIL_TEMP = 70;
+const SEUIL_HUM = 30;
+const SEUIL_SOUND = 70;
+let alertTemp=false, alertHum=false, alertSound=false;
+
+// Date & heure
+function updateDateTime(){
+    const now = new Date();
+    document.getElementById('datetime').innerText = now.toLocaleString();
+}
+setInterval(updateDateTime,1000);
+updateDateTime();
+
+// Chart.js
+function createChart(ctx,label,color,fillColor){
+    return new Chart(ctx,{
+        type:'line',
+        data:{labels:[], datasets:[{label:label, data:[], borderColor:color, backgroundColor:fillColor, fill:true}]},
+        options:{responsive:true, animation:false, plugins:{legend:{display:true}}}
+    });
+}
+
+const tempChart = createChart(document.getElementById('tempChart').getContext('2d'),'Temp (°C)','red','rgba(255,0,0,0.1)');
+const humChart = createChart(document.getElementById('humChart').getContext('2d'),'Hum (%)','blue','rgba(0,0,255,0.1)');
+const soundChart = createChart(document.getElementById('soundChart').getContext('2d'),'Son (dB)','orange','rgba(255,165,0,0.1)');
+
+function showAlert(message){
+    const box=document.getElementById('alertBox');
+    box.innerText=message;
+    box.style.display='block';
+    setTimeout(()=>{ box.style.display='none'; },4000);
+}
+
+// Mise à jour données
+async function updateData(){
+    try{
+        const res=await fetch('/capteurs');
+        const data=await res.json();
+        const time=new Date().toLocaleTimeString();
+
+        document.getElementById('temp').innerText=data.temperature;
+        document.getElementById('humidity').innerText=data.humidity;
+        document.getElementById('sound').innerText=data.sound;
+
+        // Status couleurs
+        document.getElementById('temp').className=data.temperature>SEUIL_TEMP?'value status-danger':'value status-ok';
+        document.getElementById('humidity').className=data.humidity<SEUIL_HUM?'value status-danger':'value status-ok';
+        document.getElementById('sound').className=data.sound>SEUIL_SOUND?'value status-danger':'value status-ok';
+
+        if(data.temperature>SEUIL_TEMP && !alertTemp){ showAlert("⚠ Température critique ! "+data.temperature+" °C"); alertTemp=true; }
+        if(data.humidity<SEUIL_HUM && !alertHum){ showAlert("⚠ Humidité trop basse ! "+data.humidity+" %"); alertHum=true; }
+        if(data.sound>SEUIL_SOUND && !alertSound){ showAlert("⚠ Son très élevé ! "+data.sound+" dB"); alertSound=true; }
+
+        function updateChart(chart,value){
+            chart.data.labels.push(time);
+            chart.data.datasets[0].data.push(value);
+            if(chart.data.labels.length>maxPoints){
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            chart.update();
+        }
+
+        updateChart(tempChart,data.temperature);
+        updateChart(humChart,data.humidity);
+        updateChart(soundChart,data.sound);
+
+    }catch(e){ console.log(e); }
+}
+
+setInterval(updateData,1500);
+updateData();
+</script>
+
+</body>
+</html>
